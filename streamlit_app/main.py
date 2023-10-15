@@ -40,22 +40,31 @@ def main():
         else:
             st.error("Error checking documents")
 
-    # Upload a PDF
-    uploaded_file = st.file_uploader("Upload a PDF File", type="pdf")
-    if uploaded_file is not None:
-        files = {'file': uploaded_file.read()}
+    # Upload multiple PDFs
+    uploaded_files = st.file_uploader(
+        "Upload PDF Files", type="pdf", accept_multiple_files=True)
+
+    if uploaded_files:
+        files_to_send = [("files", (file.name, file.read(), "application/pdf"))
+                         for file in uploaded_files]
+
         try:
-            response = requests.post(f"{api_url}/upload/", files=files)
+            response = requests.post(
+                f"{api_url}/multipleupload/", files=files_to_send)
+
             if response.status_code == 200:
                 upload_status = json.loads(response.text)
-                if upload_status['status'] == 'Success':
-                    st.success("File successfully uploaded and processed.")
-                else:
-                    st.error(
-                        f"Error uploading file: {upload_status['message']}")
+                for result in upload_status['results']:
+                    if result['status'] == 'Success':
+                        st.success(
+                            f"{result['filename']} successfully uploaded and processed.")
+                    else:
+                        st.error(
+                            f"Error uploading {result['filename']}: {result['message']}")
             else:
                 st.error(
-                    f"Failed to communicate with API. Status code: {response.status_code}")
+                    f"Failed to communicate with API. Status code: {response.status_code}, Response: {response.text}")
+
         except json.JSONDecodeError:
             st.error("Server response is not valid JSON.")
         except Exception as e:
