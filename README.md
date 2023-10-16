@@ -1,60 +1,79 @@
-<h1 align="center">Welcome to chatpdfgio with Fastapi Backend IA 👋</h1>
-<p>
-  <a href="https://github.com/Giocrisrai/chatpdfgio#readme" target="_blank">
-    <img alt="Python" src="https://img.shields.io/badge/Python-3.9-green.svg" />
-  </a>
-  <a href="https://github.com/Giocrisrai/chatpdfgio#readme" target="_blank">
-    <img alt="Documentation" src="https://img.shields.io/badge/documentation-yes-green.svg" />
-  </a>
-</p>
 
-> Backend Chat bot IA
+# ChatPDFGio: Intelligent Chatbot with PDF Processing
 
-1. Create Virtual Enviroment
+[![Python Version](https://img.shields.io/badge/Python-3.9-green.svg)](https://www.python.org/)
+[![Documentation](https://img.shields.io/badge/documentation-yes-green.svg)](https://github.com/Giocrisrai/chatpdfgio#readme)
 
-```
-python -m venv venv
-```
+## Overview
 
-2. Activate enviroment
+ChatPDFGio is an intelligent chatbot application that leverages machine learning for natural language processing and file handling capabilities for PDFs. It consists of a FastAPI backend for processing and a Streamlit frontend for user interaction.
 
-```sh
-source venv/bin/activate
- -or-
-source venv/Scripts/activate
-```
+## Architecture
 
-3. Install dependecies
+- `api/`: Backend API built with FastAPI
+- `streamlit_app/`: Frontend application built with Streamlit
+- `Dockerfiles`: For containerizing the application
 
-```sh
-pip install -r api/requirements.txt
+## Getting Started
+
+### Prerequisites
+
+- Python 3.9+
+- Docker (Optional)
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/Giocrisrai/chatpdfgio.git
+cd chatpdfgio
 ```
 
-4. start the server
-   inside folder -> api/
+### Backend Setup
 
-```sh
-uvicorn main:app --reload
-```
+1. Navigate to `api/` directory
+2. Install the dependencies:
 
-## ENV
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-```
-OPENAI_API_KEY=
+3. Run the FastAPI server:
 
-AWS_ACCESS_KEY=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=
+    ```bash
+    uvicorn main:app --reload
+    ```
 
-YOUR_BUCKET_NAME=
-PINECONE_API_KEY=
-PINECONE_API_ENV=
-YOUR_INDEX_NAME=
-```
+4. (Optional) To containerize the backend, check the README in `api/` directory.
+
+### Frontend Setup
+
+1. Navigate to `streamlit_app/` directory
+2. Install the dependencies:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3. Run the Streamlit app:
+
+    ```bash
+    streamlit run main.py
+    ```
+
+4. (Optional) To containerize the frontend, check the README in `streamlit_app/` directory.
+
+## Environmental Variables
+
+Both the frontend and backend use environmental variables for configuration. Check the respective README files in their directories for more details.
 
 ## Author
 
 👤 **Giocrisrai Godoy**
 
--   Website: https://www.giocrisrai.com/
--   Github: [@alaya-digital-solutions](https://github.com/giocrisrai)
+- [Website](https://www.giocrisrai.com/)
+- [GitHub](https://github.com/giocrisrai)
+- [LinkedIn](https://www.linkedin.com/in/giocrisrai)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.

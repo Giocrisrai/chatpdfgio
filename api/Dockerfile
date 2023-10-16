@@ -11,17 +11,17 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copie el archivo requirements.txt en el directorio de trabajo y luego instale las dependencias
-COPY api/requirements.txt .
+COPY requirements.txt .
 RUN pip install -U pip && pip install -r requirements.txt
 
 # Copie los archivos de la aplicación en el directorio de trabajo
-COPY api/ ./api
+COPY . .
 
 # Establecer el PYTHONPATH
-ENV PYTHONPATH /app/api
+ENV PYTHONPATH /app
 
 # Exponga el puerto necesario
 EXPOSE 8000
 
 # Ejecute Gunicorn como el proceso principal del contenedor
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "api.main:app", "-w", "4", "--timeout", "300", "-k", "uvicorn.workers.UvicornWorker"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "main:app", "-w", "4", "--timeout", "300", "-k", "uvicorn.workers.UvicornWorker"]
