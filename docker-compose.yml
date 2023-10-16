@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  fastapi_backend:
+    image: fastapi_backend_image
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      YOUR_BUCKET_NAME: ${YOUR_BUCKET_NAME}
+      PINECONE_API_KEY: ${PINECONE_API_KEY}
+      PINECONE_API_ENV: ${PINECONE_API_ENV}
+      YOUR_INDEX_NAME: ${YOUR_INDEX_NAME}
+    networks:
+      - main_network
+
+  streamlit_frontend:
+    image: streamlit_frontend_image
+    build:
+      context: ./streamlit_app
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: ${API_URL}
+    networks:
+      - main_network
+    depends_on:
+      - fastapi_backend
+
+networks:
+  main_network:
+    driver: bridge
