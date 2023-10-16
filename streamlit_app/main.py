@@ -21,13 +21,14 @@ def main() -> None:
     # Initialize session state
     initialize_session_state()
 
-    # API URL
+    # API URL and Logo URL
     api_url = os.environ.get('API_URL')
+    logo_url = os.environ.get('LOGO_URL')
 
     # UI setup
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image("img/Logo - FocusTech  Fondo negro.svg", width=345)
+        st.image(logo_url, width=345)
     with col2:
         st.markdown(
             "<div style='margin-left: 100px; background-color: #a377db; padding: 14px; border-radius: 10px;'>"
