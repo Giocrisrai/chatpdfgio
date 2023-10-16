@@ -3,10 +3,12 @@ import streamlit as st
 import requests
 from app.file_upload import send_files_to_api
 from app.chat import chat_widget
-# Importing the session state initialization function
 from app.utils import initialize_session_state
+import os
+from dotenv import load_dotenv
 
-# Initialize logging
+
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 
@@ -20,7 +22,7 @@ def main() -> None:
     initialize_session_state()
 
     # API URL
-    api_url = 'https://chatbot-gpt-app-yr2m2.ondigitalocean.app'
+    api_url = os.environ.get('API_URL')
 
     # UI setup
     col1, col2 = st.columns([1, 2])
