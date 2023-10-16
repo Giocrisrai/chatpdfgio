@@ -1,88 +1,108 @@
-"""
-Streamlit App for interacting with Document and Chat API.
-
-This application allows users to:
-1. Check the status of documents loaded into the system.
-2. Upload PDF files for processing.
-3. Interact with a chatbot that answers questions based on the uploaded documents.
-
-To run this application, use the following command:
-$ streamlit run app_streamlit.py
-"""
-
+import logging
 import streamlit as st
 import requests
-import json
+from app.file_upload import send_files_to_api
+from app.chat import chat_widget
+# Importing the session state initialization function
+from app.utils import initialize_session_state
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
 
 
-def main():
-    st.title('Document and Chat API Demo Interface')
+def main() -> None:
+    """
+    The main function for running the Streamlit application.
+    This function initializes session states, sets up the UI,
+    and handles file uploads and chat interactions.
+    """
+    # Initialize session state
+    initialize_session_state()
 
-    # Update with the URL of your hosted API
+    # API URL
     api_url = 'https://chatbot-gpt-app-yr2m2.ondigitalocean.app'
 
-    # Verify API connection
-    try:
-        response = requests.get(f'{api_url}/')
-        if response.status_code == 200:
-            st.sidebar.success('Connected to API')
-        else:
-            st.sidebar.error('Failed to connect to API')
-    except Exception as e:
-        st.sidebar.error(f'Error connecting to API: {e}')
+    # UI setup
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image("img/Logo - FocusTech  Fondo negro.svg", width=345)
+    with col2:
+        st.markdown(
+            "<div style='margin-left: 100px; background-color: #a377db; padding: 14px; border-radius: 10px;'>"
+            "<h1 style='text-align: center; color: white; font-size: 40px;'>Demo de Buscador Inteligente FOCUSTECH</h1>"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
-    # Check documents
-    if st.button('Check Documents'):
-        response = requests.get(f"{api_url}/check-documents/")
-        if response.status_code == 200:
-            docs_status = json.loads(response.text)
-            st.write(docs_status['message'])
-        else:
-            st.error("Error checking documents")
+    # Description and Start Button
+    st.markdown(
+        "<div style='background: linear-gradient(to right, #a377db, #7da3d9); padding: 20px; border-radius: 10px;'>"
+        "<h2 style='color: white; font-size: 28px;'>🌟 ¿Qué hace nuestro Buscador Inteligente?</h2>"
+        "<div style='font-size: 20px; color: white;'>"
+        "🚀 **Búsqueda Eficiente**: Encuentra lo que necesitas en segundos.<br>"
+        "🤖 **Inteligencia Artificial**: Respuestas precisas y naturales.<br>"
+        "🌐 **Multilingüe**: Busca en varios idiomas.<br>"
+        "</div>"
+        "<hr style='border-color: white;'>"
+        "<h3 style='color: white; font-size: 24px;'>🌈 ¿Listo para empezar?</h3>"
+        "</div>",
+        unsafe_allow_html=True
+    )
 
-    # Upload multiple PDFs
-    uploaded_files = st.file_uploader(
-        "Upload PDF Files", type="pdf", accept_multiple_files=True)
+    if st.button('🌟 Empezar 🌟', key='start_button'):
+        st.session_state.show_sections = True
 
-    if uploaded_files:
-        files_to_send = [("files", (file.name, file.read(), "application/pdf"))
-                         for file in uploaded_files]
+    if st.session_state.show_sections:
+        # File Upload Section
+        st.markdown(
+            "<div style='background: linear-gradient(to right, #89a8cc, #a377db); padding: 20px; border-radius: 10px;'>"
+            "<h2 style='color: white; font-size: 28px;'>📁 1. Carga tus archivos PDF</h2>"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
-        try:
-            response = requests.post(
-                f"{api_url}/multipleupload/", files=files_to_send)
+        uploaded_files = st.file_uploader(
+            "📤 Carga tus archivos PDF aquí", type="pdf", accept_multiple_files=True)
 
-            if response.status_code == 200:
-                upload_status = json.loads(response.text)
-                for result in upload_status['results']:
-                    if result['status'] == 'Success':
-                        st.success(
-                            f"{result['filename']} successfully uploaded and processed.")
-                    else:
-                        st.error(
-                            f"Error uploading {result['filename']}: {result['message']}")
-            else:
-                st.error(
-                    f"Failed to communicate with API. Status code: {response.status_code}, Response: {response.text}")
-
-        except json.JSONDecodeError:
-            st.error("Server response is not valid JSON.")
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-
-    # Chat interface
-    user_input = st.text_input("Ask a Question:")
-    if st.button('Submit Question'):
-        response = requests.post(
-            f"{api_url}/chat/", params={"query": user_input})
-        if response.status_code == 200:
+        if uploaded_files:
+            files_to_send = [
+                ("files", (file.name, file.read(), "application/pdf")) for file in uploaded_files]
             try:
-                chat_response = json.loads(response.text)
-                st.write(f"Answer: {chat_response['response']}")
-            except json.JSONDecodeError:
-                st.error("Server response is not valid JSON.")
-        else:
-            st.error("Failed to get chat response")
+                status_code = send_files_to_api(files_to_send, api_url)
+                if status_code == 200:
+                    st.session_state.files_processed = True
+                    st.success(
+                        "✅ Los archivos se han cargado y procesado correctamente.")
+                    logging.info("Files successfully processed.")
+                else:
+                    logging.error(
+                        f"Error in file processing. Status code: {status_code}")
+            except requests.exceptions.ConnectionError as e:
+                logging.error(f"Connection Error: {e}")
+                st.error(
+                    "Error en la conexión con el servidor. Por favor, inténtelo de nuevo más tarde.")
+
+        # Chat Section
+        st.markdown(
+            "<div style='background: linear-gradient(to right, #967bb6, #89a8cc); padding: 20px; border-radius: 10px;'>"
+            "<h2 style='color: white; font-size: 28px;'>💬 2. Interactúa con la Búsqueda Inteligente</h2>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+        user_input = st.text_input("❓ Haz una pregunta:")
+
+        if st.button('🔍 Enviar pregunta'):
+            if user_input:
+                chat_widget(api_url, user_input)
+
+        # Contact Section
+        st.markdown(
+            "<div style='background: linear-gradient(to right, #7da3d9, #967bb6); padding: 20px; border-radius: 10px;'>"
+            "<h3 style='color: white; font-size: 24px;'><a href='mailto:contacto@focus-tech.cl' style='color: white; text-decoration: none;'>📧 ¿Te interesa? Contacta con nosotros</a></h3>"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
 
 if __name__ == "__main__":
