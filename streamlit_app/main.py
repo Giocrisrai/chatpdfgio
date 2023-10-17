@@ -4,6 +4,7 @@ import requests
 from app.file_upload import send_files_to_api
 from app.chat import chat_widget
 from app.utils import initialize_session_state
+from app.authentication import initialize_firebase, login_user, check_auth
 import os
 from dotenv import load_dotenv
 
@@ -85,22 +86,42 @@ def main() -> None:
     This function initializes session states, sets up the UI,
     and handles file uploads and chat interactions.
     """
-    # Initialize session state
-    initialize_session_state()
+    # Initialize Firebase
+    initialize_firebase()
 
-    # Retrieve API URL and Logo URL from environment variables
-    api_url = os.environ.get('API_URL')
-    logo_url = os.environ.get('LOGO_URL')
+    # Initialize session state for authentication
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'show_sections' not in st.session_state:
+        st.session_state.show_sections = False
 
-    # UI setup: Display logo
-    st.image(logo_url, width=700)
+    # UI for Authentication
+    st.sidebar.header("User Authentication")
+    email = st.sidebar.text_input("Email")
+    password = st.sidebar.text_input("Password", type="password")
 
-    # UI setup: Description and Start Button
-    display_description()
+    if st.sidebar.button("Log In"):
+        token = login_user(email, password)
+        if token:
+            st.session_state.user_token = token
+            st.session_state.authenticated = True
+            st.success("Successfully authenticated.")
+        else:
+            st.error("Authentication failed.")
 
-    if st.session_state.show_sections:
-        handle_file_upload(api_url)
-        handle_chat(api_url)
+    # Check authentication before proceeding
+    if st.session_state.authenticated:
+        # Retrieve API URL and Logo URL from environment variables
+        api_url = os.environ.get('API_URL')
+        logo_url = os.environ.get('LOGO_URL')
+
+        # UI setup
+        st.image(logo_url, width=700)
+        display_description()
+
+        if st.session_state.show_sections:
+            handle_file_upload(api_url)
+            handle_chat(api_url)
 
 
 if __name__ == "__main__":
