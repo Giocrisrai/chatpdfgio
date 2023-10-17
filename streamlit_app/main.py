@@ -6,6 +6,7 @@ from app.chat import chat_widget
 from app.utils import initialize_session_state
 from app.authentication import initialize_firebase, login_user, check_auth
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,8 +28,6 @@ def display_description() -> None:
         "</div>",
         unsafe_allow_html=True
     )
-    if st.button('Iniciar', key='start_button'):
-        st.session_state.show_sections = True
 
 
 def handle_file_upload(api_url: str) -> None:
@@ -44,24 +43,24 @@ def handle_file_upload(api_url: str) -> None:
         "Sube tus archivos PDF aquí", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
-        files_to_send = [
-            ("files", (file.name, file.read(), "application/pdf")) for file in uploaded_files]
-        try:
-            status_code = send_files_to_api(files_to_send, api_url)
-            if status_code == 200:
-                st.session_state.files_processed = True
-                st.success(
-                    "Los archivos se han cargado y procesado con éxito.")
-                logging.info("Files successfully processed.")
-            else:
-                logging.error(
-                    f"Error en el procesamiento de archivos. Código de estado: {status_code}")
+        with st.spinner('Procesando archivos...'):
+            files_to_send = [
+                ("files", (file.name, file.read(), "application/pdf")) for file in uploaded_files]
+            try:
+                status_code = send_files_to_api(files_to_send, api_url)
+                if status_code == 200:
+                    st.success(
+                        "Los archivos se han cargado y procesado con éxito.")
+                    logging.info("Files successfully processed.")
+                else:
+                    st.error(
+                        f"Ocurrió un error al procesar los archivos. Código de estado: {status_code}")
+                    logging.error(
+                        f"Error en el procesamiento de archivos. Código de estado: {status_code}")
+            except requests.exceptions.ConnectionError as e:
                 st.error(
-                    f"Ocurrió un error al procesar los archivos. Código de estado: {status_code}")
-        except requests.exceptions.ConnectionError as e:
-            logging.error(f"Error de conexión: {e}")
-            st.error(
-                "Error en la conexión con el servidor. Intente de nuevo más tarde.")
+                    "Error en la conexión con el servidor. Intente de nuevo más tarde.")
+                logging.error(f"Error de conexión: {e}")
 
 
 def handle_chat(api_url: str) -> None:
@@ -83,42 +82,72 @@ def handle_chat(api_url: str) -> None:
 def main() -> None:
     """
     Main function to run the Streamlit application.
-    This function initializes session states, sets up the UI,
-    and handles file uploads and chat interactions.
     """
-    # Initialize Firebase
-    initialize_firebase()
 
-    # Initialize session state for authentication
+    # Initialize session state variables
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
     if 'show_sections' not in st.session_state:
         st.session_state.show_sections = False
+    if 'user_email' not in st.session_state:
+        st.session_state.user_email = None
 
-    # UI for Authentication
-    st.sidebar.header("User Authentication")
-    email = st.sidebar.text_input("Email")
-    password = st.sidebar.text_input("Password", type="password")
+    # Always display logo and description at the top
+    api_url = os.environ.get('API_URL')
+    logo_url = os.environ.get('LOGO_URL')
+    st.image(logo_url, width=700)
+    display_description()
 
-    if st.sidebar.button("Log In"):
-        token = login_user(email, password)
-        if token:
-            st.session_state.user_token = token
-            st.session_state.authenticated = True
-            st.success("Successfully authenticated.")
-        else:
-            st.error("Authentication failed.")
+    # Sidebar section
+    st.sidebar.header("Control Panel")
+    # Placeholder for user info and Logout button
+    user_info_placeholder = st.sidebar.empty()
 
-    # Check authentication before proceeding
+    # Logout button and user email should only be visible when authenticated
     if st.session_state.authenticated:
-        # Retrieve API URL and Logo URL from environment variables
-        api_url = os.environ.get('API_URL')
-        logo_url = os.environ.get('LOGO_URL')
+        user_info_placeholder.write(
+            f"Logged in as: {st.session_state.user_email}")
+        if st.sidebar.button("Logout"):
+            st.session_state.authenticated = False
+            st.session_state.show_sections = False
+            st.session_state.user_email = None
+            user_info_placeholder.empty()  # Clear the placeholder
 
-        # UI setup
-        st.image(logo_url, width=700)
-        display_description()
+    # User Authentication section should only be visible when not authenticated
+    if not st.session_state.authenticated:
+        st.sidebar.subheader("User Authentication")
+        email = st.sidebar.text_input("Email")
+        password = st.sidebar.text_input("Password", type="password")
 
+        if st.sidebar.button("Log In"):
+            try:
+                initialize_firebase()
+                token = login_user(email, password)
+                if token:
+                    st.session_state.user_token = token
+                    st.session_state.authenticated = True
+                    st.session_state.user_email = email
+                    st.sidebar.success("Successfully authenticated.")
+                    time.sleep(2)
+                else:
+                    st.sidebar.error("Authentication failed.")
+                    time.sleep(2)
+            except Exception as e:
+                st.sidebar.error(f"Failed to initialize Firebase: {e}")
+                time.sleep(2)
+
+    # Main application sections should only be visible when authenticated
+    if st.session_state.authenticated:
+        # Reserva un espacio para el botón 'Iniciar'
+        iniciar_placeholder = st.empty()
+
+        # Show the 'Iniciar' button only if the sections are not yet displayed
+        if not st.session_state.show_sections:
+            if iniciar_placeholder.button('Iniciar', key='start_button_authenticated'):
+                st.session_state.show_sections = True
+                iniciar_placeholder.empty()  # Limpia el espacio reservado para el botón
+
+        # Show the main application sections only if 'Iniciar' has been clicked
         if st.session_state.show_sections:
             handle_file_upload(api_url)
             handle_chat(api_url)
