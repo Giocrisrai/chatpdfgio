@@ -4,9 +4,8 @@ import requests
 from app.file_upload import send_files_to_api
 from app.chat import chat_widget
 from app.utils import initialize_session_state
-from app.authentication import initialize_firebase, login_user, check_auth
+from app.authentication import initialize_firebase, login_user
 import os
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -99,24 +98,22 @@ def handle_chat(api_url: str) -> None:
 def main() -> None:
     # Initialize session state variables
     if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
+        st.session_state.authenticated = False  # Inicializar authenticated en False
     if 'show_sections' not in st.session_state:
         st.session_state.show_sections = False
     if 'user_email' not in st.session_state:
         st.session_state.user_email = None
 
-    # Always display logo and description at the top
+    # UI Elements
     api_url = os.environ.get('API_URL')
     logo_url = os.environ.get('LOGO_URL')
     st.image(logo_url, width=700)
     display_description()
 
-    # Sidebar section
-    st.sidebar.header("Control Panel")
-
     # Placeholder for user info and Logout button
     user_info_placeholder = st.sidebar.empty()
 
+    # Handle user authentication
     if st.session_state.authenticated:
         user_info_placeholder.write(
             f"Logged in as: {st.session_state.user_email}")
@@ -125,9 +122,11 @@ def main() -> None:
             st.session_state.show_sections = False
             st.session_state.user_email = None
             user_info_placeholder.empty()
+            st.markdown('<meta http-equiv="refresh" content="0">',
+                        unsafe_allow_html=True)
 
     if not st.session_state.authenticated:
-        st.sidebar.subheader("User Authentication")
+        st.sidebar.subheader("INGRESAR")
         email = st.sidebar.text_input("Email")
         password = st.sidebar.text_input("Password", type="password")
 
@@ -142,6 +141,7 @@ def main() -> None:
                 else:
                     st.sidebar.error("Authentication failed.")
 
+    # Main Application Logic
     if st.session_state.authenticated:
         if st.button("Iniciar"):
             st.session_state.show_sections = True
