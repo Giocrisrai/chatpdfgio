@@ -86,3 +86,28 @@ def check_documents(bucket_name: str) -> bool:
     """
     response = s3_client.list_objects(Bucket=bucket_name)
     return 'Contents' in response
+
+
+def upload_file(file_bytes: bytes, unique_filename: str) -> Dict[str, Union[str, bool]]:
+    """
+    Upload a file to Amazon S3.
+
+    **Arguments**:
+    - `file_bytes` (bytes): The bytes of the file to be uploaded.
+    - `unique_filename` (str): The unique filename to use for the uploaded file.
+    - `bucket` (str): The name of the bucket to upload the file to.
+
+    **Returns**:
+    - A dictionary containing the status, message, and filename of the uploaded file.
+    """
+    try:
+        s3_client.put_object(
+            Body=file_bytes, Bucket=os.environ.get(
+                'YOUR_BUCKET_NAME'), Key=unique_filename)
+        return {"status": "Success", "message": "File uploaded successfully to S3", "filename": unique_filename}
+    except FileNotFoundError:
+        return {"status": "Failed", "message": "File not found"}
+    except NoCredentialsError:
+        return {"status": "Failed", "message": "Credentials not available"}
+    except ClientError as e:
+        return {"status": "Failed", "message": str(e)}
