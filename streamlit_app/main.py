@@ -53,15 +53,43 @@ def handle_file_upload(api_url: str) -> None:
             unsafe_allow_html=True
         )
 
+        # Permitir múltiples tipos de archivo
         uploaded_files = st.file_uploader(
-            "Sube tus archivos PDF aquí", type="pdf", accept_multiple_files=True)
+            "Sube tus archivos aquí",
+            type=["pdf", "docx", "pptx", "mp3", "m4a"],
+            accept_multiple_files=True
+        )
 
         if uploaded_files:
             with st.spinner('Procesando archivos...'):
-                files_to_send = [
-                    ("files", (file.name, file.read(), "application/pdf")) for file in uploaded_files]
+                files_to_send = []
+
+                # Preparar los archivos para enviar
+                for file in uploaded_files:
+                    file_extension = file.name.split(".")[-1].lower()
+                    content_type = ""
+
+                    # Determinar el tipo de contenido según la extensión
+                    if file_extension == "pdf":
+                        content_type = "application/pdf"
+                    elif file_extension == "docx":
+                        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    elif file_extension == "pptx":
+                        content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    elif file_extension in ["mp3", "m4a"]:
+                        content_type = "audio/mpeg"
+                    else:
+                        st.warning(
+                            f"Archivo no compatible: {file.name}. Se omitirá.")
+                        continue  # Omitir archivos no compatibles
+
+                    files_to_send.append(
+                        ("files", (file.name, file.read(), content_type)))
+
                 try:
+                    # Enviar los archivos a tu API para procesarlos
                     status_code = send_files_to_api(files_to_send, api_url)
+
                     if status_code == 200:
                         st.success(
                             "Los archivos se han cargado y procesado con éxito.")
