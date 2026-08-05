@@ -1,79 +1,108 @@
+# ChatPDFGio — Chatea con tus documentos PDF (RAG full-stack)
 
-# ChatPDFGio: Intelligent Chatbot with PDF Processing
+Aplicación **RAG (Retrieval-Augmented Generation)** de extremo a extremo: sube uno o varios PDF y conversa con ellos en lenguaje natural. La respuesta se construye a partir del contenido real de tus documentos —con recuperación semántica sobre una base vectorial— no de la memoria del modelo.
 
-[![Python Version](https://img.shields.io/badge/Python-3.9-green.svg)](https://www.python.org/)
-[![Documentation](https://img.shields.io/badge/documentation-yes-green.svg)](https://github.com/Giocrisrai/chatpdfgio#readme)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=langchain&logoColor=white)](https://www.langchain.com/)
+[![Pinecone](https://img.shields.io/badge/Pinecone-Vector%20DB-000000?style=flat-square)](https://www.pinecone.io/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-Embeddings%20%2B%20LLM-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE.md)
 
-## Overview
+---
 
-ChatPDFGio is an intelligent chatbot application that leverages machine learning for natural language processing and file handling capabilities for PDFs. It consists of a FastAPI backend for processing and a Streamlit frontend for user interaction.
+## Qué resuelve
 
-## Architecture
+Leer y consultar documentos largos (informes, contratos, papers, manuales) es lento. ChatPDFGio convierte cualquier PDF en una base de conocimiento consultable: haces las preguntas, obtienes respuestas **fundamentadas en el documento** y reduces las alucinaciones al anclar la generación en los fragmentos recuperados.
 
-- `api/`: Backend API built with FastAPI
-- `streamlit_app/`: Frontend application built with Streamlit
-- `Dockerfiles`: For containerizing the application
+## Cómo funciona (pipeline RAG)
 
-## Getting Started
+```
+PDF  ─►  Extracción           ─►  Chunking        ─►  Embeddings        ─►  Índice vectorial
+         (pypdf, unstructured)     (segmentación)      (OpenAI)              (Pinecone)
+                                                                                  │
+Pregunta del usuario  ─►  Embedding de la consulta  ─►  Búsqueda por similitud ◄──┘
+                                                              │
+                                                              ▼
+                                          Contexto recuperado  ─►  LLM (OpenAI)  ─►  Respuesta fundamentada
+```
 
-### Prerequisites
+1. **Ingesta:** el PDF se procesa con `pypdf` / `unstructured` y se divide en fragmentos manejables.
+2. **Indexación:** cada fragmento se vectoriza con embeddings de OpenAI y se almacena en **Pinecone**.
+3. **Recuperación:** la pregunta se vectoriza y se buscan los fragmentos más similares (búsqueda semántica).
+4. **Generación:** el LLM responde usando *solo* el contexto recuperado, anclado en el material fuente.
 
-- Python 3.9+
-- Docker (Optional)
+## Arquitectura
 
-### Clone the Repository
+| Capa | Tecnología | Rol |
+|------|-----------|-----|
+| **Frontend** | Streamlit | Carga de PDF y chat interactivo |
+| **Backend** | FastAPI + Uvicorn | API de ingesta, embeddings y consulta |
+| **Orquestación LLM** | LangChain | Pipeline RAG (loaders, splitters, chains) |
+| **Base vectorial** | Pinecone | Almacenamiento y recuperación semántica |
+| **Modelos** | OpenAI | Embeddings + generación |
+| **Auth / datos** | Firebase | Gestión de usuarios y sesiones |
+| **Despliegue** | Docker Compose | `fastapi_backend` + `streamlit_frontend` |
+
+```
+chatpdfgio/
+├── api/                # Backend FastAPI (ingesta, embeddings, RAG)
+├── streamlit_app/      # Frontend Streamlit (UI de chat)
+├── docker-compose.yml  # Orquesta backend + frontend
+└── .devcontainer/      # Entorno de desarrollo reproducible
+```
+
+## Características
+
+- 📄 **Multi-PDF** — sube varios documentos y consúltalos en conjunto.
+- 🔎 **Recuperación semántica** — respuestas ancladas al contenido real (menos alucinaciones).
+- ⚡ **API REST** — backend FastAPI desacoplado, consumible desde cualquier cliente.
+- 🐳 **Contenerizado** — `docker compose up` levanta todo el stack.
+- 🔐 **Autenticación** — gestión de usuarios vía Firebase.
+
+## Inicio rápido
+
+### Con Docker (recomendado)
 
 ```bash
 git clone https://github.com/Giocrisrai/chatpdfgio.git
 cd chatpdfgio
+# Configura las variables de entorno (OpenAI, Pinecone, Firebase) — ver READMEs en api/ y streamlit_app/
+docker compose up --build
 ```
 
-### Backend Setup
+### Manual
 
-1. Navigate to `api/` directory
-2. Install the dependencies:
+**Backend**
+```bash
+cd api
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+**Frontend**
+```bash
+cd streamlit_app
+pip install -r requirements.txt
+streamlit run main.py
+```
 
-3. Run the FastAPI server:
+## Variables de entorno
 
-    ```bash
-    uvicorn main:app --reload
-    ```
+El backend y el frontend se configuran por variables de entorno (claves de **OpenAI**, **Pinecone** y **Firebase**). Consulta los `README` de `api/` y `streamlit_app/` para el detalle. **Nunca** comitees tus claves.
 
-4. (Optional) To containerize the backend, check the README in `api/` directory.
+## Autor
 
-### Frontend Setup
+👤 **Giocrisrai Godoy Bonillo** — AI Engineer · LLM Security & Assurance
 
-1. Navigate to `streamlit_app/` directory
-2. Install the dependencies:
+- 🌐 [giocrisrai.com](https://www.giocrisrai.com/)
+- 💻 [github.com/Giocrisrai](https://github.com/Giocrisrai)
+- 💼 [linkedin.com/in/giocrisrai](https://www.linkedin.com/in/giocrisrai)
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+> Proyecto de demostración de un pipeline RAG. Para auditoría de seguridad de aplicaciones y agentes LLM como este (OWASP Top 10 for LLM Applications), ver [**agent-assurance**](https://github.com/Giocrisrai/agent-assurance).
 
-3. Run the Streamlit app:
+## Licencia
 
-    ```bash
-    streamlit run main.py
-    ```
-
-4. (Optional) To containerize the frontend, check the README in `streamlit_app/` directory.
-
-## Environmental Variables
-
-Both the frontend and backend use environmental variables for configuration. Check the respective README files in their directories for more details.
-
-## Author
-
-👤 **Giocrisrai Godoy**
-
-- [Website](https://www.giocrisrai.com/)
-- [GitHub](https://github.com/giocrisrai)
-- [LinkedIn](https://www.linkedin.com/in/giocrisrai)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+MIT — ver [LICENSE.md](LICENSE.md).
