@@ -1,0 +1,22 @@
+name: CI
+
+# Chequeo de sintaxis liviano. NO despliega (el proyecto no tiene destino de
+# deploy asignado). Sin secretos ni dependencias externas.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compilar fuentes Python (syntax check)
+        run: python -m compileall -q api streamlit_app
