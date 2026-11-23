@@ -13,6 +13,12 @@ Aplicación **RAG (Retrieval-Augmented Generation)** de extremo a extremo: sube 
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE.md)
 
+**[▶ Demo en vivo](https://giocrisrai.github.io/chatpdfgio/)** — búsqueda semántica sobre un documento, corriendo entera en tu navegador: sin servidor y sin claves.
+
+![Demo: se indexa un documento y una pregunta recupera los fragmentos más cercanos con su similitud](docs/demo.gif)
+
+> La demo cubre la **mitad de recuperación** del pipeline RAG (fragmentación, embeddings con `all-MiniLM-L6-v2` y similitud coseno). La aplicación completa añade la generación con FastAPI, OpenAI y Pinecone, que necesita claves de pago y por eso no está alojada.
+
 ---
 
 ## Qué resuelve

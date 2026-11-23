@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatPDFGio · in-browser retrieval demo</title>
+<meta name="description" content="Semantic search over your PDF, running entirely in your browser. The retrieval half of a RAG pipeline, with no server and no API keys.">
+<style>
+  :root { --bg:#0b1220; --panel:#111a2e; --border:#24304a; --text:#e6ebf5; --muted:#9aa7c0; --accent:#38bdf8; --ok:#34d399; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { margin:0 0 8px; font-size:1.7rem; }
+  p.lead { color:var(--muted); margin:0 0 24px; }
+  a { color:var(--accent); }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:20px; }
+  .panel h2 { margin:0 0 12px; font-size:1.05rem; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button, .file { background:var(--accent); color:#04121f; border:0; border-radius:8px; padding:10px 16px; font-weight:600; font-size:.95rem; cursor:pointer; }
+  button.secondary, .file { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input[type=file] { display:none; }
+  input[type=text] { flex:1; min-width:220px; background:#0a1020; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:1rem; }
+  #status { color:var(--muted); font-size:.92rem; margin-top:12px; min-height:1.4em; }
+  #status.ok { color:var(--ok); }
+  .hit { border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-top:12px; background:#0a1020; }
+  .hit .meta { display:flex; justify-content:space-between; gap:12px; font-size:.82rem; color:var(--muted); margin-bottom:6px; }
+  .bar { height:4px; background:var(--border); border-radius:2px; margin-bottom:10px; overflow:hidden; }
+  .bar span { display:block; height:100%; background:var(--accent); }
+  .note { font-size:.9rem; color:var(--muted); border-left:3px solid var(--border); padding-left:12px; }
+  code { background:#0a1020; border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:.9em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ChatPDFGio · in-browser retrieval demo</h1>
+  <p class="lead">Semantic search over a document, running entirely in your browser. No server, no API keys, and your file never leaves your device.</p>
+
+  <section class="panel">
+    <h2>1. Choose a document</h2>
+    <div class="row">
+      <button id="sample">Use the sample document</button>
+      <label class="file">Upload a PDF<input id="pdf" type="file" accept="application/pdf"></label>
+    </div>
+    <div id="status">The embedding model (about 25&nbsp;MB) downloads the first time you index a document.</div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Ask a question</h2>
+    <div class="row">
+      <input id="q" type="text" placeholder="e.g. Why does retrieval reduce hallucinations?" disabled>
+      <button id="ask" disabled>Search</button>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section class="panel">
+    <h2>What this demo is, and is not</h2>
+    <p class="note">This is the <strong>retrieval half</strong> of the RAG pipeline: the document is split into chunks, each chunk is embedded with <code>all-MiniLM-L6-v2</code>, and your question is matched by cosine similarity. It works best in English.</p>
+    <p class="note">The full application adds the <strong>generation half</strong>: a FastAPI backend, OpenAI embeddings, a Pinecone vector index and an LLM that answers using only the retrieved chunks. That part needs paid API keys, so it is not hosted here.
+    <a href="https://github.com/Giocrisrai/chatpdfgio">Source on GitHub</a>.</p>
+  </section>
+</main>
+
+<script type="module">
+import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2';
+import * as pdfjs from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs';
+pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+
+const SAMPLE = `Retrieval-augmented generation, or RAG, is a way of answering questions with a language model while grounding the answer in documents the model was never trained on. Instead of relying on what the model remembers, the system first looks up relevant passages and then asks the model to answer using only those passages.
+
+A RAG pipeline has two halves. The first half is indexing: each document is split into chunks, every chunk is turned into a vector by an embedding model, and the vectors are stored in a vector database. The second half is answering: the question is embedded with the same model, the closest chunks are retrieved by similarity, and they are placed in the prompt as context.
+
+Chunk size is a trade-off. Small chunks are precise but can lose the surrounding context that makes a sentence meaningful. Large chunks keep context but dilute the embedding, so the relevant sentence is harder to find. Overlapping consecutive chunks helps, because an idea that straddles a boundary still appears whole in one of them.
+
+Retrieval reduces hallucinations because the model is asked to answer from text that is in front of it rather than from memory. It does not remove them. If retrieval returns the wrong passages, the model will confidently answer from the wrong material, so the quality of the search bounds the quality of the answer.
+
+A common production bug is an empty context. If the code that assembles the retrieved chunks drops them by mistake, the model receives the question with no supporting text and answers from memory, while the application still looks healthy. Tests on the context-assembly step catch this class of error without calling any external service.
+
+Evaluating a RAG system means measuring both halves. Retrieval is measured with recall at k: how often the passage that contains the answer is among the top k results. Generation is measured by faithfulness, meaning whether every claim in the answer is supported by the retrieved context, and by answer relevance.
+
+Security matters too. Documents are untrusted input. A PDF can contain text written to manipulate the model, for example instructions to ignore the system prompt. This is indirect prompt injection, and it is why retrieved text should be treated as data, never as instructions.`;
+
+const $ = id => document.getElementById(id);
+const status = (text, ok = false) => { $('status').textContent = text; $('status').className = ok ? 'ok' : ''; };
+
+let extractor = null;
+let chunks = [];
+let vectors = [];
+
+/** Split text into overlapping chunks of roughly `size` characters, on sentence boundaries. */
+export function chunkText(text, size = 500, overlap = 1) {
+  const sentences = text.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+  const out = [];
+  let current = [];
+  let length = 0;
+  for (const raw of sentences) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    if (length + sentence.length > size && current.length) {
+      out.push(current.join(' '));
+      current = current.slice(-overlap);
+      length = current.join(' ').length;
+    }
+    current.push(sentence);
+    length += sentence.length + 1;
+  }
+  if (current.length) out.push(current.join(' '));
+  return out;
+}
+
+async function embed(texts) {
+  const output = await extractor(texts, { pooling: 'mean', normalize: true });
+  return output.tolist();
+}
+
+async function index(text, label) {
+  $('ask').disabled = true; $('q').disabled = true; $('results').innerHTML = '';
+  try {
+    if (!extractor) {
+      status('Downloading the embedding model (about 25 MB, first time only)…');
+      extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    }
+    chunks = chunkText(text);
+    if (!chunks.length) { status('No text found in that document. Scanned PDFs need OCR first.'); return; }
+    vectors = [];
+    for (let i = 0; i < chunks.length; i += 8) {
+      status(`Embedding chunk ${Math.min(i + 8, chunks.length)} of ${chunks.length}…`);
+      vectors.push(...await embed(chunks.slice(i, i + 8)));
+    }
+    status(`Indexed “${label}”: ${chunks.length} chunks. Ask a question below.`, true);
+    $('ask').disabled = false; $('q').disabled = false; $('q').focus();
+  } catch (error) {
+    console.error(error);
+    status('Something went wrong while indexing: ' + error.message);
+  }
+}
+
+async function readPdf(file) {
+  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  let text = '';
+  for (let page = 1; page <= pdf.numPages; page++) {
+    status(`Reading page ${page} of ${pdf.numPages}…`);
+    const content = await (await pdf.getPage(page)).getTextContent();
+    text += content.items.map(item => item.str).join(' ') + '\n';
+  }
+  return text;
+}
+
+async function search() {
+  const question = $('q').value.trim();
+  if (!question || !vectors.length) return;
+  $('ask').disabled = true;
+  const [queryVector] = await embed([question]);
+  const scored = vectors
+    .map((vector, i) => ({ i, score: vector.reduce((sum, value, k) => sum + value * queryVector[k], 0) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  $('results').innerHTML = '';
+  for (const { i, score } of scored) {
+    const hit = document.createElement('div');
+    hit.className = 'hit';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `<span>Chunk ${i + 1} of ${chunks.length}</span><span>similarity ${score.toFixed(3)}</span>`;
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.innerHTML = `<span style="width:${Math.max(0, Math.min(1, score)) * 100}%"></span>`;
+    const body = document.createElement('div');
+    body.textContent = chunks[i];
+    hit.append(meta, bar, body);
+    $('results').append(hit);
+  }
+  $('ask').disabled = false;
+}
+
+$('sample').addEventListener('click', () => index(SAMPLE, 'sample document on RAG'));
+$('pdf').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try { await index(await readPdf(file), file.name); }
+  catch (error) { console.error(error); status('Could not read that PDF: ' + error.message); }
+});
+$('ask').addEventListener('click', search);
+$('q').addEventListener('keydown', event => { if (event.key === 'Enter') search(); });
+</script>
+</body>
+</html>
