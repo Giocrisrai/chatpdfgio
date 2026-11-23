@@ -1,5 +1,7 @@
 # ChatPDFGio — Chatea con tus documentos PDF (RAG full-stack)
 
+> **English summary.** End-to-end RAG application: upload one or more PDFs and chat with them in natural language. Documents are parsed and chunked, embedded with OpenAI and indexed in Pinecone; each question is answered by an LLM grounded on the retrieved chunks, not on the model's memory. FastAPI backend, Streamlit frontend, LangChain orchestration, Docker. The rest of this document is in Spanish.
+
 Aplicación **RAG (Retrieval-Augmented Generation)** de extremo a extremo: sube uno o varios PDF y conversa con ellos en lenguaje natural. La respuesta se construye a partir del contenido real de tus documentos —con recuperación semántica sobre una base vectorial— no de la memoria del modelo.
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
