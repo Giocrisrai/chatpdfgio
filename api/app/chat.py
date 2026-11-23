@@ -143,13 +143,13 @@ def retrieve_context(query: str) -> Tuple[str, List[Dict[str, str]]]:
     reference = [{'source': source} for source in sources]
 
     # Add context until reaching MAX_CONTEXT_LENGTH
-    context = ''
-    for i in range(1, len(contexts)):
-        if len("\n\n---\n\n".join(contexts[:i])) > MAX_CONTEXT_LENGTH:
-            context = "\n\n---\n\n".join(contexts[:i-1])
+    separator = "\n\n---\n\n"
+    selected: List[str] = []
+    for fragment in contexts:
+        if len(separator.join(selected + [fragment])) > MAX_CONTEXT_LENGTH:
             break
-        elif i == len(contexts)-1:
-            context = "\n\n---\n\n".join(contexts)
+        selected.append(fragment)
+    context = separator.join(selected)
 
     return context, reference
 

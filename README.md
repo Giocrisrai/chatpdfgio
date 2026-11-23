@@ -108,3 +108,12 @@ El backend y el frontend se configuran por variables de entorno (claves de **Ope
 ## Licencia
 
 MIT — ver [LICENSE.md](LICENSE.md).
+
+## Pruebas
+
+La lógica RAG (historial de conversación, selección de contexto y construcción del prompt) tiene pruebas que corren sin red ni credenciales: los SDK de OpenAI y Pinecone se reemplazan por dobles.
+
+```bash
+pip install pytest
+pytest api/tests -q
+```

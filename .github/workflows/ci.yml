@@ -1,7 +1,8 @@
 name: CI
 
-# Chequeo de sintaxis liviano. NO despliega (el proyecto no tiene destino de
-# deploy asignado). Sin secretos ni dependencias externas.
+# Chequeo de sintaxis y pruebas de la logica RAG. NO despliega (el proyecto no
+# tiene destino de deploy asignado). Sin secretos ni red: los SDK externos se
+# reemplazan por dobles en las pruebas.
 
 on:
   push:
@@ -20,3 +21,16 @@ jobs:
           python-version: "3.11"
       - name: Compilar fuentes Python (syntax check)
         run: python -m compileall -q api streamlit_app
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar pytest
+        run: pip install pytest
+      - name: Pruebas de la logica RAG
+        run: pytest api/tests -q
