@@ -1,39 +1,34 @@
-version: '3.8'
-
 services:
-  fastapi_backend:
-    image: fastapi_backend_image
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+  api:
+    build: ./api
     ports:
       - "8000:8000"
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_REGION: ${AWS_REGION}
-      YOUR_BUCKET_NAME: ${YOUR_BUCKET_NAME}
-      PINECONE_API_KEY: ${PINECONE_API_KEY}
-      PINECONE_API_ENV: ${PINECONE_API_ENV}
-      YOUR_INDEX_NAME: ${YOUR_INDEX_NAME}
-    networks:
-      - main_network
+      # Without keys the API runs on the local backend (no accounts needed).
+      RAG_BACKEND: ${RAG_BACKEND:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+      PINECONE_INDEX: ${PINECONE_INDEX:-chatpdfgio}
+      PINECONE_CLOUD: ${PINECONE_CLOUD:-aws}
+      PINECONE_REGION: ${PINECONE_REGION:-us-east-1}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-5-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501}
+    volumes:
+      - documents:/app/data
 
-  streamlit_frontend:
-    image: streamlit_frontend_image
-    build:
-      context: ./streamlit_app
-      dockerfile: Dockerfile
+  frontend:
+    build: ./streamlit_app
     ports:
       - "8501:8501"
     environment:
-      API_URL: ${API_URL}
-    networks:
-      - main_network
+      API_URL: ${API_URL:-http://api:8000}
     depends_on:
-      - fastapi_backend
+      - api
 
-networks:
-  main_network:
-    driver: bridge
+volumes:
+  documents:

@@ -1,33 +1,35 @@
-import requests
 import logging
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+import requests
+
 logger = logging.getLogger(__name__)
 
+# Content types by extension. Audio only works on the cloud backend of the API.
+CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "txt": "text/plain",
+    "md": "text/markdown",
+    "mp3": "audio/mpeg",
+    "m4a": "audio/mp4",
+    "wav": "audio/wav",
+}
 
-def send_files_to_api(files: List[Tuple[str, bytes, str]], api_url: str) -> int:
-    """
-    Sends files to the API for processing.
 
-    Parameters:
-    - files : List[Tuple[str, bytes, str]]
-        List of files to be sent to the API.
-    - api_url : str
-        The URL of the API to which the files will be sent.
+def send_files_to_api(
+    files: List[Tuple[str, Tuple[str, bytes, str]]], api_url: str, timeout: float = 300.0
+) -> Optional[List[dict]]:
+    """Send files to the API and return one result per file.
 
-    Returns:
-    - int
-        HTTP status code received from the API.
+    Each result has ``filename``, ``status`` ("Success" or "Failed") and ``message``.
+    Returns ``None`` when the request itself failed.
     """
     try:
-        response = requests.post(f"{api_url}/multipleupload/", files=files)
-        response.raise_for_status()  # Raise HTTPError for bad responses
-        logger.info(
-            f"Successfully sent files to {api_url}. Status code: {response.status_code}")
-        return response.status_code
-    except requests.RequestException as e:
-        # Handle exceptions related to the HTTP request
-        logger.error(f"An error occurred while sending files to API: {e}")
-        return None  # or you could re-raise the exception: raise e
+        response = requests.post(f"{api_url}/multipleupload/", files=files, timeout=timeout)
+        response.raise_for_status()
+        return response.json().get("results", [])
+    except requests.RequestException as error:
+        logger.error("An error occurred while sending files to the API: %s", error)
+        return None

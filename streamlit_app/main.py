@@ -1,7 +1,7 @@
 import logging
 import streamlit as st
 import requests
-from app.file_upload import send_files_to_api
+from app.file_upload import CONTENT_TYPES, send_files_to_api
 from app.chat import chat_widget
 from app.utils import initialize_session_state
 from app.authentication import initialize_firebase, login_user
@@ -56,7 +56,7 @@ def handle_file_upload(api_url: str) -> None:
         # Permitir múltiples tipos de archivo
         uploaded_files = st.file_uploader(
             "Sube tus archivos aquí",
-            type=["pdf", "docx", "pptx", "mp3", "m4a"],
+            type=list(CONTENT_TYPES),
             accept_multiple_files=True
         )
 
@@ -67,18 +67,8 @@ def handle_file_upload(api_url: str) -> None:
                 # Preparar los archivos para enviar
                 for file in uploaded_files:
                     file_extension = file.name.split(".")[-1].lower()
-                    content_type = ""
-
-                    # Determinar el tipo de contenido según la extensión
-                    if file_extension == "pdf":
-                        content_type = "application/pdf"
-                    elif file_extension == "docx":
-                        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    elif file_extension == "pptx":
-                        content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    elif file_extension in ["mp3", "m4a"]:
-                        content_type = "audio/mpeg"
-                    else:
+                    content_type = CONTENT_TYPES.get(file_extension)
+                    if content_type is None:
                         st.warning(
                             f"Archivo no compatible: {file.name}. Se omitirá.")
                         continue  # Omitir archivos no compatibles
@@ -86,25 +76,20 @@ def handle_file_upload(api_url: str) -> None:
                     files_to_send.append(
                         ("files", (file.name, file.read(), content_type)))
 
-                try:
-                    # Enviar los archivos a tu API para procesarlos
-                    status_code = send_files_to_api(files_to_send, api_url)
-
-                    if status_code == 200:
-                        st.success(
-                            "Los archivos se han cargado y procesado con éxito.")
-                        logging.info("Files successfully processed.")
-                        st.session_state.files_uploaded = True  # Actualizar el estado de la sesión
-                    else:
-                        st.error(
-                            f"Ocurrió un error al procesar los archivos. Código de estado: {status_code}")
-                        logging.error(
-                            f"Error en el procesamiento de archivos. Código de estado: {status_code}")
-                except requests.exceptions.ConnectionError as e:
+                # Enviar los archivos a la API y mostrar el resultado de CADA uno:
+                # la API responde 200 aunque algun archivo no se haya podido leer.
+                results = send_files_to_api(files_to_send, api_url) if files_to_send else []
+                if results is None:
                     st.error(
                         "Error en la conexión con el servidor. Intente de nuevo más tarde.")
-                    logging.error(f"Error de conexión: {e}")
-
+                else:
+                    for result in results:
+                        if result.get("status") == "Success":
+                            st.success(f"{result['filename']}: cargado y procesado.")
+                        else:
+                            st.error(f"{result['filename']}: {result.get('message', 'error')}")
+                    if any(result.get("status") == "Success" for result in results):
+                        st.session_state.files_uploaded = True
 
 def handle_chat(api_url: str) -> None:
     """Handle user interaction for the chat widget."""

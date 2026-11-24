@@ -1,199 +1,160 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Body
-from fastapi.responses import RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
-from app.s3_operations import upload_pdf, check_documents, initialize_s3_client, s3_object_exists, upload_file
-from app.pdf_processing import process_pdf
-from app.pinecone_ops import generate_and_store_embeddings
-from app.chat import process_user_query, initialize_pinecone
-from app.docx_processing import process_docx
-from app.pptx_processing import process_pptx
-from app.audio_processing import process_audio
-from app.utils import initialize_openai
-from typing import List, Dict, Union
-import os
-import uuid
+"""ChatPDFGio API: upload documents and ask questions answered from their content."""
+
+from __future__ import annotations
+
 import logging
-import traceback
+from contextlib import asynccontextmanager
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+
+from app.config import Settings
+from app.extraction import EmptyDocument, UnsupportedFileType
+from app.rag import RagService
+from app.services import build_service
+
+logger = logging.getLogger("chatpdfgio")
 
 
-# Initialize Pinecone
-initialize_pinecone()
-
-client = initialize_openai()
-if not client:
-    logging.error("Failed to initialize OpenAI client.")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-
-app = FastAPI()
-# Configuración de CORS
-
-origins = [
-
-    "*"
-
-]
-
-app.add_middleware(
-
-    CORSMiddleware,
-
-    allow_origins=origins,
-
-    allow_credentials=True,
-
-    allow_methods=["*"],
-
-    allow_headers=["*"],
-
-)
-# Fetch bucket name from environment variables
-your_bucket_name = os.environ.get('YOUR_BUCKET_NAME')
-
-# Initialize the S3 client once
-s3 = initialize_s3_client()
-if not s3:
-    logging.error("Failed to initialize S3 client.")
+class UploadResult(BaseModel):
+    filename: str
+    status: str
+    message: str
+    chunks: int = 0
 
 
-@app.get("/", tags=["Root"])
-def read_root() -> RedirectResponse:
-    """Redirect to the API documentation."""
-    return RedirectResponse(url="/docs/")
+class MultipleUploadResponse(BaseModel):
+    results: list[UploadResult]
 
 
-@app.get("/check-documents/", tags=["Documents"], response_description="Check if documents are loaded")
-async def check_docs() -> Dict[str, Union[str, bool]]:
-    """Check the current status of documents loaded in the system."""
-    current_status = check_documents(your_bucket_name)
-    return {"status": "Success", "message": "Documents loaded." if current_status else "No documents loaded."}
+class SourceOut(BaseModel):
+    source: str
+    location: str
+    score: float
 
 
-@app.post("/upload/", tags=["Documents"])
-async def upload_pdf_route(file: UploadFile = File(..., description="A PDF file to be uploaded", example="example.pdf")) -> Dict[str, Union[str, bool]]:
-    """
-    Upload a single PDF file, process it, and store its embeddings.
-
-    **Arguments**:
-    - `file`: A PDF file to be uploaded.
-
-    **Returns**:
-    - A dictionary with the status, message, and filename.
-    """
-    logging.info("Starting upload process...")
-    unique_filename = file.filename
-    file_bytes = file.file.read()
-    try:
-        # Use upload_pdf function instead of s3.put_object directly
-        upload_response = upload_pdf(file_bytes, unique_filename)
-        if upload_response['status'] != "Success":
-            return upload_response  # Return the error response directly if upload fails
-
-        # Call process_pdf with all necessary arguments and capture the returned tuple
-        data, temp_pdf_path = process_pdf(
-            s3, your_bucket_name, unique_filename)
-
-        # For debugging
-        logging.info(f"Data type from process_pdf: {type(data)}, Data: {data}")
-        logging.info(f"Temp PDF path: {temp_pdf_path}")
-
-        # Call generate_and_store_embeddings instead of generate_embeddings and store_embeddings
-        generate_and_store_embeddings(data, temp_pdf_path)
-
-        return {
-            "status": "Success",
-            "message": "File uploaded, processed, and embeddings stored successfully",
-            "filename": unique_filename
-        }
-    except Exception as e:
-        # Added for debugging
-        logging.error(f"Error type: {type(e)}, Error: {e}")
-        return {"status": "Failed", "message": str(e)}
+class ChatResponse(BaseModel):
+    response: str
+    sources: list[SourceOut] = []
 
 
-@app.post("/multipleupload/", tags=["Documents"])
-async def multiple_upload_route(files: List[UploadFile] = File(..., description="A list of files to be uploaded", examples=[{"filename": "example1.pdf"}, {"filename": "example2.docx"}])) -> Dict[str, List[Dict[str, Union[str, bool]]]]:
-    """
-    Upload multiple files, process them, and store their embeddings.
+class StatusResponse(BaseModel):
+    status: str
+    message: str
+    backend: str
 
-    **Arguments**:
-    - `files`: A list of files to be uploaded. The supported file types are PDF, DOCX, PPTX, MP3, M4A.
 
-    **Returns**:
-    - A dictionary with a list of result dictionaries, each containing the status, message, and filename.
-    """
-    results = []
-    for file in files:
-        unique_filename = file.filename
-        file_bytes = file.file.read()
-        file_extension = unique_filename.split(".")[-1].lower()
+def get_service(request: Request) -> RagService:
+    return request.app.state.service
 
+
+ServiceDep = Annotated[RagService, Depends(get_service)]
+
+
+def create_app(settings: Settings | None = None, service: RagService | None = None) -> FastAPI:
+    """Application factory. Tests pass their own settings and service."""
+    settings = settings or Settings.from_env()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # External clients are created at startup, not at import time.
+        app.state.settings = settings
+        app.state.service = service or build_service(settings)
+        logger.info("ChatPDFGio started with the %s backend", settings.backend)
+        yield
+
+    app = FastAPI(title="ChatPDFGio", version="2.0.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
+    async def _ingest(service: RagService, file: UploadFile) -> UploadResult:
+        name = file.filename or "document"
+        data = await file.read()
+        if len(data) > settings.max_upload_mb * 1024 * 1024:
+            return UploadResult(
+                filename=name,
+                status="Failed",
+                message=f"file is larger than {settings.max_upload_mb} MB",
+            )
         try:
-            # Upload the file to S3
-            upload_response = upload_file(
-                file_bytes, unique_filename)
-            if upload_response['status'] != "Success":
-                results.append({
-                    "filename": unique_filename,
-                    "status": "Failed",
-                    "message": upload_response['message'],
-                })
-                continue  # Skip to the next file if the upload fails
+            result = service.ingest(name, data)
+        except (UnsupportedFileType, EmptyDocument) as error:
+            return UploadResult(filename=name, status="Failed", message=str(error))
+        except Exception:
+            # Details go to the log; the client gets a neutral message.
+            logger.exception("failed to process %s", name)
+            return UploadResult(
+                filename=name, status="Failed", message="the file could not be processed"
+            )
+        return UploadResult(
+            filename=result.filename,
+            status="Success",
+            message="File uploaded, processed and indexed",
+            chunks=result.chunks,
+        )
 
-            # Process the file depending on its extension
-            if file_extension == "pdf":
-                data, temp_path = process_pdf(
-                    s3, your_bucket_name, unique_filename)
-            elif file_extension == "docx":
-                data, temp_path = process_docx(
-                    s3, your_bucket_name, unique_filename)
-            elif file_extension == "pptx":
-                data, temp_path = process_pptx(
-                    s3, your_bucket_name, unique_filename)
-            elif file_extension in ["mp3", "m4a"]:
-                # Assuming process_audio function exists and is imported
-                data, temp_path = process_audio(
-                    s3, your_bucket_name, unique_filename, client)
-            else:
-                raise HTTPException(
-                    status_code=400, detail=f"Unsupported file type: {file_extension}")
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
 
-            # Generate and store embeddings
-            generate_and_store_embeddings(data, temp_path)
+    @app.get("/health", tags=["Status"])
+    def health() -> dict[str, str]:
+        return {"status": "ok", "backend": settings.backend}
 
-            results.append({
-                "filename": unique_filename,
-                "status": "Success",
-                "message": "File uploaded, processed, and embeddings stored successfully",
-            })
-        except HTTPException as http_exception:
-            raise http_exception
-        except Exception as e:
-            logging.error(f"Error processing file {unique_filename}: {e}")
-            results.append({
-                "filename": unique_filename,
-                "status": "Failed",
-                "message": str(e),
-            })
+    @app.get("/check-documents/", tags=["Documents"])
+    def check_documents(service: ServiceDep) -> StatusResponse:
+        loaded = service.has_documents()
+        return StatusResponse(
+            status="Success",
+            message="Documents loaded." if loaded else "No documents loaded.",
+            backend=settings.backend,
+        )
 
-    return {"results": results}
+    @app.post("/upload/", tags=["Documents"])
+    async def upload(service: ServiceDep, file: UploadFile = File(...)) -> UploadResult:
+        """Upload one file, extract its text and index it."""
+        return await _ingest(service, file)
+
+    @app.post("/multipleupload/", tags=["Documents"])
+    async def multiple_upload(
+        service: ServiceDep, files: list[UploadFile] = File(...)
+    ) -> MultipleUploadResponse:
+        """Upload several files (PDF, DOCX, PPTX, TXT, MD; MP3/M4A/WAV on the cloud backend)."""
+        return MultipleUploadResponse(results=[await _ingest(service, file) for file in files])
+
+    @app.post("/chat/", tags=["Chat"])
+    def chat(
+        service: ServiceDep,
+        query: str = Query(..., min_length=1, description="The question to answer"),
+    ) -> ChatResponse:
+        """Answer a question using only the content of the indexed documents."""
+        if len(query) > settings.max_query_chars:
+            raise HTTPException(
+                status_code=413,
+                detail=f"the question is longer than {settings.max_query_chars} characters",
+            )
+        try:
+            answer = service.answer(query)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except Exception as error:
+            logger.exception("failed to answer a question")
+            raise HTTPException(
+                status_code=502, detail="the answer could not be generated"
+            ) from error
+        return ChatResponse(
+            response=answer.text,
+            sources=[SourceOut(**vars(source)) for source in answer.sources],
+        )
+
+    return app
 
 
-@app.post("/chat/", tags=["Chat"])
-async def chat_endpoint(query: str = Query(..., description="The user's text query", examples="What is a PDF file?")) -> Dict[str, str]:
-    """
-    Handle a user's text query and return a response.
-
-    **Arguments**:
-    - `query`: A string containing the user's text query.
-
-    **Returns**:
-    - A dictionary with a response string.
-    """
-    try:
-        response = process_user_query(query)
-        return {"response": response}
-    except Exception as e:
-        print(traceback.format_exc())  # Print the full traceback
-        raise HTTPException(status_code=500, detail=str(e))
+app = create_app()

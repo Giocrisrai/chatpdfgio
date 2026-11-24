@@ -1,35 +1,33 @@
 import logging
-import requests
 from typing import Optional
+
+import requests
 import streamlit as st
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def chat_widget(api_url: str, user_input: Optional[str]) -> None:
-    """
-    A Streamlit widget for chatting through a specified API.
-
-    Parameters:
-    - api_url: str, The URL of the API endpoint where the chat request will be sent.
-    - user_input: Optional[str], The user's question to the chatbot.
-
-    Raises:
-    - Exception: Any exception raised during the chat request will be caught and logged.
-    """
+def chat_widget(api_url: str, user_input: Optional[str], timeout: float = 120.0) -> None:
+    """Ask the API a question and show the answer with the documents it came from."""
     try:
-        payload = {'query': user_input}
-        response = requests.post(f"{api_url}/chat/", params=payload)
-
-        if response.status_code == 200:
-            chat_response = response.json()['response']
-            st.write(f"📘 **Respuesta**: {chat_response}")
-        else:
-            logging.error(
-                f"Failed to get chat response. Status code: {response.status_code}")
+        response = requests.post(
+            f"{api_url}/chat/", params={"query": user_input}, timeout=timeout
+        )
+        if response.status_code != 200:
+            logger.error("Failed to get chat response. Status code: %s", response.status_code)
             st.error("Error al obtener la respuesta de la búsqueda inteligente.")
-    except Exception as e:
-        logging.error(f"An error occurred in chat_widget: {e}")
+            return
+        body = response.json()
+        st.write(f"📘 **Respuesta**: {body['response']}")
+        sources = body.get("sources", [])
+        if sources:
+            st.caption(
+                "Fuentes: "
+                + " · ".join(f"{item['source']} ({item['location']})" for item in sources)
+            )
+    except Exception as error:
+        logger.error("An error occurred in chat_widget: %s", error)
         st.error(
-            "Ocurrió un error al interactuar con la Búsqueda Inteligente. Inténtelo de nuevo más tarde.")
+            "Ocurrió un error al interactuar con la Búsqueda Inteligente. "
+            "Inténtelo de nuevo más tarde."
+        )

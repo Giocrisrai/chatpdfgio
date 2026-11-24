@@ -1,0 +1,8 @@
+# The rule set is written out so a newer ruff does not change what CI checks.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008: `File(...)` / `Query(...)` as argument defaults is the FastAPI idiom.
+ignore = ["B008"]
